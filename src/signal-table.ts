@@ -11,36 +11,35 @@ import { Signal } from "signal-polyfill";
 
 
 export class SignalTable<TData extends RowData> {
-  #tableInstance: Table<TData>;
+  api: Table<TData>;
   #state: Signal.State<TableState>;
   #computed: Signal.Computed<void>;
 
   get() {
     this.#computed.get();
-    return this.#tableInstance;
+    return this.api;
   }
 
   constructor(optionsFn: () => TableOptions<TData>) {
-    if (!this.#tableInstance) {
-      const options = Signal.subtle.untrack(optionsFn);
-      const resolvedOptions: TableOptionsResolved<TData> = {
-        state: {},
-        onStateChange: () => {}, // noop
-        renderFallbackValue: null,
-        ...options,
-      };
+    const options = Signal.subtle.untrack(optionsFn);
+    const resolvedOptions: TableOptionsResolved<TData> = {
+      state: {},
+      onStateChange: () => { }, // noop
+      renderFallbackValue: null,
+      ...options,
+    };
 
-      this.#tableInstance = createTable(resolvedOptions);
-      this.#state = new Signal.State({
-        ...this.#tableInstance.initialState,
-        ...options.state,
-      });
-    }
+    this.api = createTable(resolvedOptions);
+    this.#state = new Signal.State({
+      ...this.api.initialState,
+      ...options.state,
+    });
 
     this.#computed = new Signal.Computed(() => {
+      
       const state = this.#state.get();
       const options = optionsFn();
-      this.#tableInstance.setOptions((prev) => ({
+      this.api.setOptions((prev) => ({
         ...prev,
         ...options,
         state: { ...state, ...options.state },
@@ -49,6 +48,6 @@ export class SignalTable<TData extends RowData> {
           options.onStateChange?.(updater);
         },
       }));
-    });
+    },{equals: ()=> false});
   }
 }

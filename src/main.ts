@@ -1,208 +1,115 @@
-import { customElement } from "lit/decorators.js";
-import { html, LitElement } from "lit";
-import { repeat } from "lit/directives/repeat.js";
 import { createColumnHelper, getCoreRowModel } from "@tanstack/table-core";
+import { SignalQuery } from "./signal-query";
+import { QueryClient } from "@tanstack/query-core";
 import { SignalTable } from "./signal-table";
-import { Signal, SignalWatcher } from "@lit-labs/signals";
+import { effect } from "signal-utils/subtle/microtask-effect";
 
 export const flexRender = <TProps extends object>(comp: any, props: TProps) => {
-  if (typeof comp === "function") {
-    return comp(props);
+    if (typeof comp === 'function') {
+      return comp(props)
+    }
+    return comp
   }
-  return comp;
-};
+
+const client = new QueryClient();
 
 type Person = {
-  firstName: string;
-  lastName: string;
-  age: number;
-  visits: number;
-  status: string;
-  progress: number;
+  name: string;
+  height: string;
 };
+
+const people = new SignalQuery(client, {
+  queryKey: ["people"],
+  queryFn: async () => {
+    return (await fetch("https://swapi.dev/api/people/")).json().then((data) =>data.results);
+  },
+  initialData:[]
+});
 
 const columnHelper = createColumnHelper<Person>();
 
 const columns = [
-  columnHelper.accessor("firstName", {
+  columnHelper.accessor("name", {
     cell: (info) => info.getValue(),
     footer: (info) => info.column.id,
   }),
-  columnHelper.accessor((row) => row.lastName, {
-    id: "lastName",
-    cell: (info) => html`<i>${info.getValue()}</i>`,
-    header: () => html`<span>Last Name</span>`,
-    footer: (info) => info.column.id,
-  }),
-  columnHelper.accessor("age", {
-    header: () => "Age",
-    cell: (info) => info.renderValue(),
-    footer: (info) => info.column.id,
-  }),
-  columnHelper.accessor("visits", {
-    header: () => html`<span>Visits</span>`,
-    footer: (info) => info.column.id,
-  }),
-  columnHelper.accessor("status", {
-    header: "Status",
-    footer: (info) => info.column.id,
-  }),
-  columnHelper.accessor("progress", {
-    header: "Profile Progress",
+  columnHelper.accessor("height", {
+    cell: (info) => `<i>${info.getValue()}</i>`,
+    header: () => "<span>Height</span>",
     footer: (info) => info.column.id,
   }),
 ];
 
-const data: Person[] = [
-  {
-    firstName: "tanner",
-    lastName: "linsley",
-    age: 24,
-    visits: 100,
-    status: "In Relationship",
-    progress: 50,
-  },
-  {
-    firstName: "tandy",
-    lastName: "miller",
-    age: 40,
-    visits: 40,
-    status: "Single",
-    progress: 80,
-  },
-  {
-    firstName: "joe",
-    lastName: "dirte",
-    age: 45,
-    visits: 20,
-    status: "Complicated",
-    progress: 10,
-  },
-  {
-    firstName: "mor",
-    lastName: "kadosh",
-    age: 31,
-    visits: 30,
-    status: "In Relationship",
-    progress: 90,
-  },
-];
+const renderTable = () => {
+   const table = tableSignal.get()
 
-const dataSignal = new Signal.State(data);
+  // Create table elements
+  const tableElement = document.createElement("table");
+  const theadElement = document.createElement("thead");
+  const tbodyElement = document.createElement("tbody");
+  const tfootElement = document.createElement("tfoot");
 
-setInterval(() => {
-  dataSignal.set([...dataSignal.get().slice(1), dataSignal.get()[0]]);
-},1000);
+  tableElement.appendChild(theadElement);
+  tableElement.appendChild(tbodyElement);
+  tableElement.appendChild(tfootElement);
 
-@customElement("lit-table-example")
-class LitTableExample extends SignalWatcher(LitElement) {
-  private tableController = new SignalTable(() => ({
-    data: dataSignal.get(),
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-  }));
+  // Render table headers
+  table.getHeaderGroups().forEach((headerGroup) => {
+    const trElement = document.createElement("tr");
+    headerGroup.headers.forEach((header) => {
+      const thElement = document.createElement("th");
+      thElement.innerHTML = header.isPlaceholder
+        ? ""
+        : flexRender(header.column.columnDef.header, header.getContext());
+      trElement.appendChild(thElement);
+    });
+    theadElement.appendChild(trElement);
+  });
 
-  protected render(): unknown {
-    const table = this.tableController.get();
+  // Render table rows
+  table.getRowModel().rows.forEach((row) => {
+    const trElement = document.createElement("tr");
+    row.getVisibleCells().forEach((cell) => {
+      const tdElement = document.createElement("td");
+      tdElement.innerHTML = flexRender(
+        cell.column.columnDef.cell,
+        cell.getContext()
+      );
+      trElement.appendChild(tdElement);
+    });
+    tbodyElement.appendChild(trElement);
+  });
 
-    return html`
-      <table>
-        <thead>
-          ${repeat(
-            table.getHeaderGroups(),
-            (headerGroup) => headerGroup.id,
-            (headerGroup) =>
-              html`${repeat(
-                headerGroup.headers,
-                (header) => header.id,
-                (header) =>
-                  html` <th>
-                    ${header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                  </th>`
-              )}`
-          )}
-        </thead>
-        <tbody>
-          ${repeat(
-            table.getRowModel().rows,
-            (row) => row.id,
-            (row) => html`
-              <tr>
-                ${repeat(
-                  row.getVisibleCells(),
-                  (cell) => cell.id,
-                  (cell) =>
-                    html` <td>
-                      ${flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </td>`
-                )}
-              </tr>
-            `
-          )}
-        </tbody>
-        <tfoot>
-          ${repeat(
-            table.getFooterGroups(),
-            (footerGroup) => footerGroup.id,
-            (footerGroup) => html`
-              <tr>
-                ${repeat(
-                  footerGroup.headers,
-                  (header) => header.id,
-                  (header) => html`
-                    <th>
-                      ${header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.footer,
-                            header.getContext()
-                          )}
-                    </th>
-                  `
-                )}
-              </tr>
-            `
-          )}
-        </tfoot>
-      </table>
-      <style>
-        * {
-          font-family: sans-serif;
-          font-size: 14px;
-          box-sizing: border-box;
-        }
+  // Render table footers
+  table.getFooterGroups().forEach((footerGroup) => {
+    const trElement = document.createElement("tr");
+    footerGroup.headers.forEach((header) => {
+      const thElement = document.createElement("th");
+      thElement.innerHTML = header.isPlaceholder
+        ? ""
+        : flexRender(header.column.columnDef.footer, header.getContext());
+      trElement.appendChild(thElement);
+    });
+    tfootElement.appendChild(trElement);
+  });
 
-        table {
-          border: 1px solid lightgray;
-          border-collapse: collapse;
-        }
+  // Clear previous content and append new content
+  const wrapperElement = document.getElementById("wrapper") as HTMLDivElement;
+  wrapperElement.innerHTML = "";
+  wrapperElement.appendChild(tableElement);
+};
 
-        tbody {
-          border-bottom: 1px solid lightgray;
-        }
+const tableSignal = new SignalTable<Person>(()=>({
+  data: people.get().data,
+  columns,
+  getCoreRowModel: getCoreRowModel(),
+}));
 
-        th {
-          border-bottom: 1px solid lightgray;
-          border-right: 1px solid lightgray;
-          padding: 2px 4px;
-        }
+effect(()=>{
+    renderTable();
+})
 
-        tfoot {
-          color: gray;
-        }
+effect(()=>{
+    console.log(people.get().data)
+})
 
-        tfoot th {
-          font-weight: normal;
-        }
-      </style>
-    `;
-  }
-}
