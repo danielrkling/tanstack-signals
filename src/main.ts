@@ -1,8 +1,9 @@
-import { createColumnHelper, getCoreRowModel } from "@tanstack/table-core";
+import { createColumnHelper, getCoreRowModel, getSortedRowModel } from "@tanstack/table-core";
 import { SignalQuery } from "./signal-query";
 import { QueryClient } from "@tanstack/query-core";
 import { SignalTable } from "./signal-table";
 import { effect } from "signal-utils/subtle/microtask-effect";
+import { html, render } from 'lit-html';
 
 export const flexRender = <TProps extends object>(comp: any, props: TProps) => {
     if (typeof comp === 'function') {
@@ -18,13 +19,13 @@ type Person = {
   height: string;
 };
 
-const people = new SignalQuery(client, {
+const people = new SignalQuery(()=>client,()=>({
   queryKey: ["people"],
   queryFn: async () => {
     return (await fetch("https://swapi.dev/api/people/")).json().then((data) =>data.results);
   },
   initialData:[]
-});
+}));
 
 const columnHelper = createColumnHelper<Person>();
 
@@ -34,82 +35,56 @@ const columns = [
     footer: (info) => info.column.id,
   }),
   columnHelper.accessor("height", {
-    cell: (info) => `<i>${info.getValue()}</i>`,
-    header: () => "<span>Height</span>",
+    cell: (info) => html`<i>${info.getValue()}</i>`,
+    header: () => html`<span>Height</span>`,
     footer: (info) => info.column.id,
   }),
 ];
 
+const tableSignal = new SignalTable<Person>(()=>({
+    data: people.get().data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel()
+  }));
+
 const renderTable = () => {
-   const table = tableSignal.get()
+  const table = tableSignal.get();
 
-  // Create table elements
-  const tableElement = document.createElement("table");
-  const theadElement = document.createElement("thead");
-  const tbodyElement = document.createElement("tbody");
-  const tfootElement = document.createElement("tfoot");
+  return html`
+    <table>
+      <thead>
+        ${table.getHeaderGroups().map(headerGroup => html`
+          <tr>
+            ${headerGroup.headers.map(header => html`
+              <th @click=${header.column.getToggleSortingHandler()}>
+                ${header.isPlaceholder ? '' : flexRender(header.column.columnDef.header, header.getContext())}
+              </th>
+            `)}
+          </tr>
+        `)}
+      </thead>
+      <tbody>
+        ${table.getRowModel().rows.map(row => html`
+          <tr>
+            ${row.getVisibleCells().map(cell => html`
+              <td>
+                ${flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </td>
+            `)}
+          </tr>
+        `)}
+      </tbody>
 
-  tableElement.appendChild(theadElement);
-  tableElement.appendChild(tbodyElement);
-  tableElement.appendChild(tfootElement);
+    </table>
+  `;
 
-  // Render table headers
-  table.getHeaderGroups().forEach((headerGroup) => {
-    const trElement = document.createElement("tr");
-    headerGroup.headers.forEach((header) => {
-      const thElement = document.createElement("th");
-      thElement.innerHTML = header.isPlaceholder
-        ? ""
-        : flexRender(header.column.columnDef.header, header.getContext());
-      trElement.appendChild(thElement);
-    });
-    theadElement.appendChild(trElement);
-  });
-
-  // Render table rows
-  table.getRowModel().rows.forEach((row) => {
-    const trElement = document.createElement("tr");
-    row.getVisibleCells().forEach((cell) => {
-      const tdElement = document.createElement("td");
-      tdElement.innerHTML = flexRender(
-        cell.column.columnDef.cell,
-        cell.getContext()
-      );
-      trElement.appendChild(tdElement);
-    });
-    tbodyElement.appendChild(trElement);
-  });
-
-  // Render table footers
-  table.getFooterGroups().forEach((footerGroup) => {
-    const trElement = document.createElement("tr");
-    footerGroup.headers.forEach((header) => {
-      const thElement = document.createElement("th");
-      thElement.innerHTML = header.isPlaceholder
-        ? ""
-        : flexRender(header.column.columnDef.footer, header.getContext());
-      trElement.appendChild(thElement);
-    });
-    tfootElement.appendChild(trElement);
-  });
-
-  // Clear previous content and append new content
-  const wrapperElement = document.getElementById("wrapper") as HTMLDivElement;
-  wrapperElement.innerHTML = "";
-  wrapperElement.appendChild(tableElement);
+  
 };
 
-const tableSignal = new SignalTable<Person>(()=>({
-  data: people.get().data,
-  columns,
-  getCoreRowModel: getCoreRowModel(),
-}));
+
 
 effect(()=>{
-    renderTable();
-})
-
-effect(()=>{
-    console.log(people.get().data)
+    render(renderTable(), document.body);
 })
 
