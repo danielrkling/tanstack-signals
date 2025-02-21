@@ -103,6 +103,11 @@ export class SignalMutation<
   TVariables = void,
   TContext = unknown
 > {
+    get() {
+        this.#observer.get();
+        return this.#state.get();
+      }
+
     #state: Signal.State<MutationObserverResult<TData, TError, TVariables, TContext>>;
     #unsubscribe?: () => void;
     #observer: Signal.Computed<

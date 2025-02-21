@@ -9,7 +9,6 @@ import {
 import { Signal } from "signal-polyfill";
 
 
-
 export class SignalTable<TData extends RowData> {
   api: Table<TData>;
   #state: Signal.State<TableState>;

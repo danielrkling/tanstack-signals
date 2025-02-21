@@ -5,7 +5,9 @@ import type {
   DeepValue,
   FieldApiOptions,
   FieldOptions,
+  FieldState,
   FormOptions,
+  FormState,
   Validator,
 } from "@tanstack/form-core";
 import { Signal } from "signal-polyfill";
@@ -15,23 +17,28 @@ export class SignalForm<
   TFormValidator extends Validator<TParentData, unknown> | undefined = undefined
 > {
   #unsubscribe?: () => void;
-  #state = new Signal.State<null>(null, { equals: () => false });
-  api: FormApi<TParentData, TFormValidator>;
+  #state: Signal.State<FormState<TParentData>>;
+  #api: Signal.Computed<FormApi<TParentData, TFormValidator>>;
+  #computed: Signal.Computed<void>;
 
-  get() {
-    this.#state.get();
-    return this.api;
+  get state() {
+    return this.#state.get();
   }
 
-  constructor(options: FormOptions<TParentData, TFormValidator>) {
-    this.api = new FormApi(options);
-    this.#unsubscribe = this.api.store.subscribe((val) => {
-      this.#state.set(null);
+  get api() {
+    return this.#api.get();
+  }
+
+  constructor(options: () => FormOptions<TParentData, TFormValidator>) {
+    const api = new FormApi(options());
+    this.#state = new Signal.State(api.store.state);
+    this.#unsubscribe = api.store.subscribe((val) => {
+      this.#state.set(val.currentVal);
     });
-  }
-
-  dispose() {
-    this.#unsubscribe?.();
+    this.#api = new Signal.Computed(() => {
+      api.update(options());
+      return api;
+    });
   }
 
   field<
@@ -41,7 +48,7 @@ export class SignalForm<
       | undefined = undefined,
     TData extends DeepValue<TParentData, TName> = DeepValue<TParentData, TName>
   >(
-    options: FieldOptions<
+    options: () => FieldOptions<
       TParentData,
       TName,
       TFieldValidator,
@@ -49,7 +56,7 @@ export class SignalForm<
       TData
     >
   ): SignalField<TParentData, TName, TFieldValidator, TFormValidator, TData> {
-    return new SignalField({ form: this.api, ...options });
+    return new SignalField(() => ({ form: this.api, ...options() }));
   }
 }
 
@@ -65,16 +72,22 @@ class SignalField<
   TData extends DeepValue<TParentData, TName> = DeepValue<TParentData, TName>
 > {
   #unsubscribe?: () => void;
-  #state = new Signal.State<null>(null, { equals: () => false });
-  api: FieldApi<TParentData, TName, TFieldValidator, TFormValidator, TData>;
+  #state: Signal.State<FieldState<TData>>;
+  #api: Signal.Computed<
+    FieldApi<TParentData, TName, TFieldValidator, TFormValidator, TData>
+  >;
+  #computed: Signal.Computed<void>;
 
-  get() {
-    this.#state.get();
-    return this.api;
+  get state() {
+    return this.#state.get();
+  }
+
+  get api() {
+    return this.#api.get();
   }
 
   constructor(
-    options: FieldApiOptions<
+    options: () => FieldApiOptions<
       TParentData,
       TName,
       TFieldValidator,
@@ -82,14 +95,15 @@ class SignalField<
       TData
     >
   ) {
-    this.api = new FieldApi(options);
-    this.#unsubscribe = this.api.store.subscribe((val) => {
-      this.#state.set(null);
+    const api = new FieldApi(options());
+    api.mount();
+    this.#state = new Signal.State(api.store.state);
+    this.#unsubscribe = api.store.subscribe((val) => {
+      this.#state.set(val.currentVal);
     });
-    this.api.mount();
-  }
-
-  dispose() {
-    this.#unsubscribe?.();
+    this.#api = new Signal.Computed(() => {
+      api.update(options());
+      return api;
+    });
   }
 }
